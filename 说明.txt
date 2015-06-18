@@ -1,0 +1,3 @@
+一、使用eclipse导入项目
+二、运行WebSocketServer.java内的main方法
+三、使用浏览器打开websocket.html即可实现聊天
