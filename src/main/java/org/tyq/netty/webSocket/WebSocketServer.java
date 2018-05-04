@@ -1,4 +1,4 @@
-package org.tyq.netty;
+package org.tyq.netty.webSocket;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -11,7 +11,9 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.stream.ChunkedWriteHandler;
+import org.springframework.stereotype.Component;
 
+@Component
 public class WebSocketServer {
 
     public void run(int port) throws InterruptedException {

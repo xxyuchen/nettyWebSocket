@@ -1,36 +1,36 @@
-package org.tyq.netty;
+package org.tyq.netty.webSocket;
 
+import com.alibaba.fastjson.JSONObject;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.channel.*;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
-import io.netty.handler.codec.http.DefaultFullHttpResponse;
-import io.netty.handler.codec.http.FullHttpRequest;
-import io.netty.handler.codec.http.FullHttpResponse;
-import io.netty.handler.codec.http.HttpHeaders;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.HttpVersion;
-import io.netty.handler.codec.http.websocketx.CloseWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.PingWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.TextWebSocketFrame;
-import io.netty.handler.codec.http.websocketx.WebSocketFrame;
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshaker;
-import io.netty.handler.codec.http.websocketx.WebSocketServerHandshakerFactory;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.*;
 import io.netty.util.CharsetUtil;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.tyq.netty.NettyApplication;
+import org.tyq.netty.entity.TuLingRequest;
+import org.tyq.netty.enums.ErrorCode;
 
+import javax.annotation.Resource;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@Component
 public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> {
 
     private static final Logger logger = Logger.getLogger(WebSocketServerHandler.class.getName());
     private WebSocketServerHandshaker handshaker;
     private static ChannelGroup group = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
+
+    private RestTemplate restTemplate = new RestTemplate();
 
     @Override
     protected void messageReceived(ChannelHandlerContext ctx, Object msg) throws Exception {
@@ -48,13 +48,13 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         group.add(ctx.channel());
-        System.out.println("客户端与服务端连接开启");
+        System.out.println("客户端"+ctx.channel().id()+"与服务端连接开启");
     }
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         group.remove(ctx.channel());
-        System.out.println("客户端与服务端连接关闭");
+        System.out.println("客户端"+ctx.channel().id()+"与服务端连接关闭");
     }
 
     @Override
@@ -87,6 +87,7 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
         }
         //判断是否是Ping消息
         if (frame instanceof PingWebSocketFrame) {
+            System.out.println(new Date()+"客户端【"+ctx.channel().id()+"】发送了有个Ping...");
             ctx.channel().write(new PingWebSocketFrame(frame.content().retain()));
             return;
         }
@@ -99,24 +100,50 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
          * 获取客户端发送的消息
          */
         String request = ((TextWebSocketFrame) frame).text();
-        System.out.println("客户端发送消息:"+request);
+        System.out.println("客户端"+ctx.channel().id()+"发送消息:"+request);
         if (logger.isLoggable(Level.FINE)) {
             logger.fine(String.format("%s received %s", ctx.channel(), request));
         }
         /**
           *返回数据到客户端
           */
-        //ctx.channel().write(new TextWebSocketFrame(request + ",欢迎使用Netty WebSocket服务,现在时刻:" + new Date().toString()));
-        String json = "{'name':'"+ctx.channel().id()+"','text':'"+request+"'}";
-        TextWebSocketFrame tws = new TextWebSocketFrame(json);
+        //ctx.channel().writeAndFlush(new TextWebSocketFrame(request + ",欢迎使用Netty WebSocket服务,现在时刻:" + new Date().toString()));
+        //String json = "{'name':'"+ctx.channel().id()+"','text':'"+request+"'}";
+        //TextWebSocketFrame tws = new TextWebSocketFrame(json);
+        TextWebSocketFrame twsf = new TextWebSocketFrame("{'name':'时间【"+new Date().toString()+"】客户【"+ctx.channel().id()+"】','text':'"+request+"'}");
         /**
          * 群发
          */
-        group.writeAndFlush(tws);
+        //group.writeAndFlush(twsf);
         /**
          * 返回【谁发的返回给谁】
          */
-        // ctx.channel().writeAndFlush(tws);
+        ctx.channel().writeAndFlush(twsf);
+        //调用图灵机器人自动回复
+        TuLingRequest agrs = new TuLingRequest();
+        agrs.getPerception().getInputText().setText(request);
+        TextWebSocketFrame serverTwsf;
+        JSONObject intent = null;
+        JSONObject data = null;
+
+        try {
+            restTemplate.getMessageConverters().set(1, new StringHttpMessageConverter(StandardCharsets.UTF_8));
+            String str = restTemplate.postForObject("http://openapi.tuling123.com/openapi/api/v2", agrs, String.class);
+            logger.info(str);
+            data = JSONObject.parseObject(str);
+            intent = data.getJSONObject("intent");
+        }catch (Exception e){
+            logger.info("调用图灵api失败："+e);
+            e.printStackTrace();
+        }
+        if(!ErrorCode.isHave(intent.getInteger("code"))){
+            JSONObject object = (JSONObject) JSONObject.parseArray(data.getString("results")).get(0);
+            JSONObject values = object.getJSONObject("values");
+            serverTwsf = new TextWebSocketFrame("{'name':'时间【" + new Date().toString() + "】服务器','text':'" + values.getString("text") + "'}");
+        }else {
+            serverTwsf = new TextWebSocketFrame("{'name':'时间【"+new Date().toString()+"】服务器','text':'不好意思，出了点状况！！！'}");
+        }
+        ctx.channel().writeAndFlush(serverTwsf);
     }
 
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse resp) {
@@ -137,5 +164,12 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         cause.printStackTrace();
         ctx.close();
+    }
+
+    public void sendHello(){
+        for (Channel channel : group){
+            System.out.println("服务器发出慰问！！！");
+            channel.writeAndFlush( new TextWebSocketFrame( "{'name':'时间【"+new Date().toString()+"】服务器','text':'hello "+channel.id()+"'}"));
+        }
     }
 }
