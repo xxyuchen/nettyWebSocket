@@ -2,6 +2,7 @@ package org.tyq.netty.entity;
 
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -12,11 +13,11 @@ public class TuLingRespose {
 
     private Intent intent;
 
-    private List<Results> results;
+    private List<Results> results = new ArrayList<>();
 
 
     @Data
-    public class Intent{
+    public static class Intent{
         private String actionName;
 
         private Integer code;
@@ -24,14 +25,14 @@ public class TuLingRespose {
         private String intentName;
     }
     @Data
-    public class Results{
+    public static class Results{
         private Integer groupType;
         private String resultType;
-        private Values values;
+        private Values values = new Values();
 
     }
     @Data
-    public class Values{
+    public static class Values{
         private String text;
     }
 }

@@ -13,11 +13,10 @@ import io.netty.util.concurrent.GlobalEventExecutor;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
-import org.tyq.netty.NettyApplication;
 import org.tyq.netty.entity.TuLingRequest;
+import org.tyq.netty.entity.TuLingRespose;
 import org.tyq.netty.enums.ErrorCode;
 
-import javax.annotation.Resource;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.logging.Level;
@@ -123,27 +122,26 @@ public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> 
         TuLingRequest agrs = new TuLingRequest();
         agrs.getPerception().getInputText().setText(request);
         TextWebSocketFrame serverTwsf;
-        JSONObject intent = null;
-        JSONObject data = null;
-
         try {
             restTemplate.getMessageConverters().set(1, new StringHttpMessageConverter(StandardCharsets.UTF_8));
             String str = restTemplate.postForObject("http://openapi.tuling123.com/openapi/api/v2", agrs, String.class);
-            logger.info(str);
-            data = JSONObject.parseObject(str);
-            intent = data.getJSONObject("intent");
+            TuLingRespose tuLingRespose = JSONObject.parseObject(str,TuLingRespose.class);
+            logger.info(tuLingRespose.toString());
+            if(!ErrorCode.isHave(tuLingRespose.getIntent().getCode())){
+                for(TuLingRespose.Results result : tuLingRespose.getResults()){
+                    serverTwsf = new TextWebSocketFrame("{'name':'时间【" + new Date().toString() + "】服务器','text':'" + result.getValues().getText() + "'}");
+                    ctx.channel().writeAndFlush(serverTwsf);
+                }
+            }else {
+                serverTwsf = new TextWebSocketFrame("{'name':'时间【"+new Date().toString()+"】服务器','text':'不好意思，出了点状况！！！'}");
+                ctx.channel().writeAndFlush(serverTwsf);
+            }
         }catch (Exception e){
             logger.info("调用图灵api失败："+e);
+            serverTwsf = new TextWebSocketFrame("{'name':'时间【"+new Date().toString()+"】服务器','text':'不好意思，出了点状况！！！'}");
+            ctx.channel().writeAndFlush(serverTwsf);
             e.printStackTrace();
         }
-        if(!ErrorCode.isHave(intent.getInteger("code"))){
-            JSONObject object = (JSONObject) JSONObject.parseArray(data.getString("results")).get(0);
-            JSONObject values = object.getJSONObject("values");
-            serverTwsf = new TextWebSocketFrame("{'name':'时间【" + new Date().toString() + "】服务器','text':'" + values.getString("text") + "'}");
-        }else {
-            serverTwsf = new TextWebSocketFrame("{'name':'时间【"+new Date().toString()+"】服务器','text':'不好意思，出了点状况！！！'}");
-        }
-        ctx.channel().writeAndFlush(serverTwsf);
     }
 
     private static void sendHttpResponse(ChannelHandlerContext ctx, FullHttpRequest req, FullHttpResponse resp) {

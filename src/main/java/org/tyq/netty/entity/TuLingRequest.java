@@ -1,8 +1,6 @@
 package org.tyq.netty.entity;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * Created by Administrator on 2018/5/4 0004.
