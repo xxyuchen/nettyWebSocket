@@ -2,6 +2,47 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title>无标题文档</title>
+<style>
+	*{
+		padding:0;
+		margin:0;
+	}
+	form{
+		padding: 10px;
+	}
+	textarea{
+		padding: 10px;
+		outline: none;
+		resize: none;
+	}
+	#responseText{
+		width: 800px;
+    	height: 350px;
+    	border-radius: 4px 4px 0 0;
+    	border:1px solid #ccc;
+	}
+	#send_text{
+		width: 800px;
+		height: 150px;
+		margin-top: -22px;
+		border-radius: 0 0 4px 4px;
+		border:1px solid #ccc;
+	}
+	#box{
+		position: relative;
+		width: 800px;
+	}
+	.btn{
+		position: absolute;
+	    bottom: 10px;
+	    right: 10px;
+	    width: 70px;
+	    height: 26px;
+	    border: 1px solid #ccc;
+	    border-radius: 4px;
+	    background: white;
+	}
+</style>
 </head>
   </head>
   <script type="text/javascript">
@@ -10,7 +51,7 @@
 	  window.WebSocket = window.MozWebSocket;
   }
   if(window.WebSocket){
-	  socket = new WebSocket("ws://localhost:7397");
+	  socket = new WebSocket("ws://192.168.0.231:7397");
 	  socket.onmessage = function(event){
 			var ta = document.getElementById('responseText');
 			var json = eval("("+event.data+")")
@@ -28,22 +69,34 @@
   }else{
 		alert("您的浏览器不支持WebSocket协议！");
   }
-  function send(message){
+  function send(){
 	if(!window.WebSocket){return;}
 	if(socket.readyState == WebSocket.OPEN){
+		var message=document.getElementById('send_text').value
 		socket.send(message);
 		document.getElementById('send_text').value="";
 	}else{
 		alert("WebSocket 连接没有建立成功！");
 	}
   }
-	  
+ 	function KeyDown()
+	{
+	  if (event.keyCode == 13)
+	  {
+	    event.returnValue=false;
+	    event.cancel = true;
+	    send()
+	  }
+  	}
   </script>
   <body>
     <form onSubmit="return false;">
-    	<input id="send_text" type = "text" name="message"/>
-    	<input type="button" value="发送" onClick="send(this.form.message.value)"/> <br/>
-    	<textarea id="responseText" style="width: 1024px;height: 300px;"></textarea>
+	    <textarea id="responseText"></textarea>
+	    <div id="box">
+	   	<textarea id="send_text" onkeydown=KeyDown()> </textarea>
+	    	<input class="btn" type="button" value="发送" onClick="send()"/>
+		</div>
     </form>
+
   </body>
 </html>
